@@ -160,17 +160,24 @@ def titre_de(hwnd):
     return t.value.strip()
 
 
+def processus():
+    """Liste des processus, sans avoir à les ouvrir : [(numéro, "programme.exe")]."""
+    res = []
+    snap = kernel32.CreateToolhelp32Snapshot(2, 0)  # TH32CS_SNAPPROCESS
+    pe = PROCESSENTRY32W(dwSize=ctypes.sizeof(PROCESSENTRY32W))
+    ok = kernel32.Process32FirstW(snap, ctypes.byref(pe))
+    while ok:
+        res.append((pe.th32ProcessID, pe.szExeFile))
+        ok = kernel32.Process32NextW(snap, ctypes.byref(pe))
+    kernel32.CloseHandle(snap)
+    return res
+
+
 @lru_cache(maxsize=32)  # shortcut: un numéro de processus réutilisé par Windows garderait l'ancien nom ; rare, à revoir si gênant
 def _exe_par_liste(pid):
     """Nom du programme par la liste des processus, qui n'a pas besoin d'ouvrir le processus : l'anti-triche de Valorant
     (Vanguard) en interdit l'accès, et QueryFullProcessImageNameW échoue alors."""
-    snap = kernel32.CreateToolhelp32Snapshot(2, 0)  # TH32CS_SNAPPROCESS
-    pe = PROCESSENTRY32W(dwSize=ctypes.sizeof(PROCESSENTRY32W))
-    ok = kernel32.Process32FirstW(snap, ctypes.byref(pe))
-    while ok and pe.th32ProcessID != pid:
-        ok = kernel32.Process32NextW(snap, ctypes.byref(pe))
-    kernel32.CloseHandle(snap)
-    return pe.szExeFile if ok else ""
+    return next((exe for p, exe in processus() if p == pid), "")
 
 
 def programme(hwnd):

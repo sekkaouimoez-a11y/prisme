@@ -21,6 +21,16 @@ installe lui-même Python et pywebview. Les fois suivantes, Prisme s'ouvre direc
 ## Lancer
 Double-clic sur `Lancer.bat` (ou `uv run prisme.py`). À la fermeture, les couleurs d'origine reviennent.
 
+## Latence CPU
+Page **Outils › Latence CPU** : bilan de ce qui fait monter la « Game Latency (CPU) » de Valorant (le temps que met le PC
+à préparer chaque image), avec un voyant par point : mode d'alimentation, Mode Jeu de Windows, NVIDIA Reflex, qualité
+graphique, plein écran et VSync, limite de FPS, applis qui prennent du processeur en fond, vitesse de la RAM.
+- Corrigés en un clic : passage en « Performances élevées », activation du Mode Jeu.
+- Lus dans les fichiers de réglages de Valorant, à changer dans le jeu : Reflex, graphismes, affichage, FPS.
+- À faire soi-même : fermer les applis gourmandes, activer le profil XMP / EXPO de la RAM dans le BIOS.
+Rien n'est lu ni écrit dans la mémoire du jeu. La priorité du jeu n'est pas touchée : Valorant se met lui-même en Haute
+quand on joue.
+
 ## Comment ça marche
 - Rampe gamma de Windows (`SetDeviceGammaRamp`), par écran : luminosité, contraste, exposition, gamma, température,
   teinte, canaux. Posée par-dessus l'étalonnage existant de l'écran.

@@ -2,6 +2,7 @@
 import unittest
 
 import couleurs as c
+import latence as lat
 
 IDENTITE = [i * 257 for i in range(256)] * 3
 EXTREMES = [{**c.NEUTRE, **{k: v for k in c.NEUTRE if k not in ("saturation", "rotation")}} for v in (-1.0, 1.0)]
@@ -70,6 +71,42 @@ class Plan(unittest.TestCase):
     def test_apercu_prend_la_place(self):
         v = c.plan(self.profils, self.ECRANS, ("python.exe", "Prisme", self.D1), apercu=self.valo)
         self.assertIs(v[self.D1], self.valo)
+
+
+BON = {"plan": "Performances élevées", "plan_min": 100, "perf_existe": True, "mode_jeu": True,
+       "valorant": lat.lire_ini("[Set]\nEAresIntSettingName::NvidiaReflexLowLatencySetting=2\n"
+                                "EAresIntSettingName::MaterialQuality=0\nEAresBoolSettingName::ShadowsEnabled=False\n"
+                                "PreferredFullscreenMode=0\nbUseVSync=False\n"),
+       "cpu": {"Discord.exe": 0.4, "svchost.exe": 9.0}, "ram": "DDR5 à 4800 MT/s"}
+
+
+class Latence(unittest.TestCase):
+    def verdicts(self, **m):
+        return {f["id"]: (f["ok"], f["action"]) for f in lat.fiches({**BON, **m})}
+
+    def test_lire_ini(self):
+        self.assertEqual(lat.lire_ini("[Sec]\nEAresFloatSettingName::MaxFramerateAlways=360\n;x=1\nbUseVSync=False"),
+                         {"MaxFramerateAlways": "360", "bUseVSync": "False"})
+
+    def test_pc_deja_regle(self):
+        v = self.verdicts()
+        self.assertFalse([k for k, (ok, action) in v.items() if ok is False or action], v)
+        self.assertIs(v["fond"][0], True)  # svchost ne compte pas, Discord sous 1 %
+
+    def test_a_corriger(self):
+        v = self.verdicts(plan_min=5, mode_jeu=False, cpu={"RobloxStudioBeta.exe": 5.1},
+                          valorant={"NvidiaReflexLowLatencySetting": "1", "ShadowsEnabled": "True", "bUseVSync": "True",
+                                    "PreferredFullscreenMode": "1"})
+        for k in ("alim", "modejeu", "reflex", "graphismes", "affichage", "fond"):
+            self.assertIs(v[k][0], False, k)
+        self.assertEqual([k for k, (_, action) in v.items() if action], ["alim", "modejeu"])
+
+    def test_inconnu_sans_action(self):
+        v = self.verdicts(plan_min=5, perf_existe=False, valorant={}, cpu=None)
+        self.assertEqual(v["alim"], (False, None))  # pas de « Performances élevées » sur ce PC : rien à proposer
+        self.assertEqual(v["fond"], (None, None))  # première mesure
+        self.assertIn("valorant", v)
+        self.assertNotIn("reflex", v)
 
 
 if __name__ == "__main__":

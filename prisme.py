@@ -8,6 +8,7 @@ from pathlib import Path
 import webview
 
 import couleurs as c
+import latence as lat
 
 ICI = Path(__file__).parent
 REGLAGES = ICI / "reglages.json"
@@ -86,6 +87,8 @@ class Api:
         self._choisi = self._d["profils"][0]["id"] if self._d["profils"] else None
         self._version = 0  # change quand Python remplace des réglages : l'interface redessine ses curseurs
         self._montres, self._apercu = {}, False
+        # À part du verrou principal : le bilan prend du temps, les couleurs ne doivent pas l'attendre.
+        self._charge, self._verrou_lat = lat.Charge(), threading.Lock()
         self._stop = threading.Event()
         self._fil = threading.Thread(target=self._boucle, daemon=True)
         self._fil.start()
@@ -152,6 +155,13 @@ class Api:
 
     def fenetres_ouvertes(self):
         return c.fenetres_ouvertes()
+
+    def latence(self):
+        with self._verrou_lat:
+            return lat.fiches(lat.mesures(self._charge))
+
+    def corriger(self, id):
+        lat.corriger(id)
 
     def _profil(self, id):
         return next((p for p in self._d["profils"] if p["id"] == id), None)

@@ -101,6 +101,27 @@
     border-radius: 50%; background: var(--text); border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--border); }
   input[type=range]:active::-webkit-slider-thumb { background: var(--accent); }
 
+  .titre-section.outils { margin-top: 24px; }
+  .titre-outil { font-size: 22px; font-weight: 600; margin: 0 0 8px; }
+  .intro { color: var(--muted); margin: 0 0 16px; max-width: 72ch; }
+  .intro b { color: var(--text); font-weight: 600; }
+  .fiches { display: grid; gap: 8px; }
+  .fiche { display: grid; grid-template-columns: 10px 1fr auto; gap: 16px; align-items: center; background: var(--surface);
+           border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; }
+  .voyant { width: 10px; height: 10px; border-radius: 50%; align-self: start; margin-top: 6px;
+            box-shadow: inset 0 0 0 2px var(--muted); }
+  .fiche.ok .voyant { background: var(--accent); box-shadow: none; }
+  .fiche.ko .voyant { background: var(--warn); box-shadow: none; }
+  .fiche.ko { border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); }
+  .fiche .tete { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  .fiche .etat { font: 12px var(--mono); color: var(--muted); }
+  .fiche.ok .etat { color: var(--accent); }
+  .fiche.ko .etat { color: var(--warn); }
+  .fiche p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  .corriger { padding: 6px 12px; border-radius: 6px; background: var(--accent); color: var(--on-accent); font-weight: 600;
+              font-size: 13px; white-space: nowrap; }
+  .corriger:disabled { opacity: .5; cursor: default; }
+
   .pied { display: flex; justify-content: flex-end; margin-top: 24px; }
   .supprimer { color: var(--muted); font-size: 13px; padding: 4px 12px; border-radius: 6px; }
   .supprimer:hover, .supprimer.sur { color: var(--danger); background: var(--surface-2); }
@@ -125,6 +146,9 @@
   <aside>
     <div class="titre-section">Profils <button class="plus" id="ajouter" title="Nouveau profil" aria-label="Nouveau profil">+</button></div>
     <div id="profils"></div>
+    <div class="titre-section outils">Outils</div>
+    <button class="profil" id="outil-latence"><span class="nom">Latence CPU</span>
+      <span class="sous">Bilan et corrections pour Valorant</span></button>
   </aside>
   <section id="editeur"><p class="vide">Chargement…</p></section>
 </main>
@@ -148,6 +172,7 @@ const PISTES = {
   bleu: "linear-gradient(90deg, #2d2d48, #4d8dff)",
 };
 let E = null, P = null, vu = {};
+let vue = "profil", latT = 0, latEnCours = false;  // vue : "profil" ou "latence"
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const poser = (el, html) => { if (el._html !== html) { el._html = html; el.innerHTML = html; } };  // sans casser un clic en cours
@@ -202,16 +227,39 @@ async function tick() {
 
   const actifs = new Set(Object.values(E.montres));
   poser($("#profils"), E.profils.map(p => `
-    <button class="profil ${p.id === E.choisi ? "choisi" : ""}" data-id="${p.id}">
+    <button class="profil ${p.id === E.choisi && vue === "profil" ? "choisi" : ""}" data-id="${p.id}">
       <span class="nom">${esc(p.nom)}${actifs.has(p.nom) ? "<i title=\"Appliqué en ce moment\"></i>" : ""}</span>
       <span class="sous">${p.cibles.length ? esc(p.cibles.map(nomAppli).join(", ")) : "Toujours"} ·
         ${p.ecran ? esc(nomEcran(p.ecran)) : p.cibles.length ? "écran de la fenêtre" : "tous les écrans"}</span>
     </button>`).join("") || `<p class="vide">Aucun profil</p>`);
 
-  if (E.choisi !== vu.id || E.version !== vu.version) {
+  $("#outil-latence").classList.toggle("choisi", vue === "latence");
+  if (vue === "latence") { if (Date.now() - latT > 2000) latence(); }
+  else if (E.choisi !== vu.id || E.version !== vu.version) {
     vu = { id: E.choisi, version: E.version };
     editeur();
   }
+}
+
+// Bilan relu toutes les 2 s tant que la page est ouverte (la charge des applis se mesure entre deux lectures).
+async function latence() {
+  if (latEnCours) return;
+  latEnCours = true;
+  latT = Date.now();
+  const F = await api().latence().finally(() => { latEnCours = false; });
+  if (vue !== "latence") return;
+  const ko = F.filter(f => f.ok === false).length;
+  poser($("#editeur"), `
+    <h1 class="titre-outil">Latence CPU</h1>
+    <p class="intro">La « Game Latency (CPU) » de Valorant, c'est le temps que met ton PC à préparer chaque image.
+      Voici ce qui la fait monter : ${ko ? `<b>${ko} point${ko > 1 ? "s" : ""} à corriger</b>` : "<b>rien à corriger</b>"}.
+      Vert : déjà au mieux. Orange : à corriger. Gris : à savoir.</p>
+    <div class="fiches">${F.map(f => `
+      <div class="fiche ${f.ok === true ? "ok" : f.ok === false ? "ko" : ""}">
+        <i class="voyant"></i>
+        <div><div class="tete"><b>${esc(f.nom)}</b><span class="etat">${esc(f.etat)}</span></div><p>${esc(f.conseil)}</p></div>
+        ${f.action ? `<button class="corriger" data-corriger="${f.id}">${esc(f.action)}</button>` : "<span></span>"}
+      </div>`).join("")}</div>`);
 }
 
 function editeur() {
@@ -296,7 +344,17 @@ document.addEventListener("click", e => {
   if (!t) return;
   if (t.id === "actif") api().basculer().then(tick);
   else if (t.id === "ajouter") api().ajouter().then(tick);
-  else if (t.dataset.id) api().choisir(+t.dataset.id).then(tick);
+  else if (t.dataset.id) { vue = "profil"; vu = {}; api().choisir(+t.dataset.id).then(tick); }
+  else if (t.id === "outil-latence") {
+    vue = "latence";
+    $("#editeur")._html = null;  // editeur() écrit sans passer par poser()
+    $("#editeur").innerHTML = `<p class="vide">Analyse du PC…</p>`;
+    latT = 0;
+    tick();
+  } else if (t.dataset.corriger) {
+    t.disabled = true;
+    api().corriger(t.dataset.corriger).then(() => { latT = 0; $("#editeur")._html = null; });  // redessiner même si rien n'a changé
+  }
   else if (t.dataset.preset) api().prereglage(P.id, t.dataset.preset).then(tick);
   else if (t.id === "ouvrir-menu") ouvrirMenu();
   else if (t.dataset.ajouter) {
