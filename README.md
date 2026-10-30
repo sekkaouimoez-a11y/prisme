@@ -10,6 +10,14 @@ Chaque profil choisit :
 Dès que l'appli passe derrière (Alt+Tab), l'écran retrouve ses couleurs d'origine. Pendant qu'on règle un profil dans
 Prisme, il est montré en aperçu.
 
+## Installer sur un PC
+1. Télécharger le ZIP : bouton vert **Code** → **Download ZIP**, puis l'extraire (clic droit → Extraire tout).
+2. Double-clic sur `Lancer.bat`. Si Windows affiche un avertissement : **Informations complémentaires** → **Exécuter
+   quand même**.
+
+Le premier lancement demande Internet et prend environ une minute : il installe [uv](https://docs.astral.sh/uv/), qui
+installe lui-même Python et pywebview. Les fois suivantes, Prisme s'ouvre directement.
+
 ## Lancer
 Double-clic sur `Lancer.bat` (ou `uv run prisme.py`). À la fermeture, les couleurs d'origine reviennent.
 
