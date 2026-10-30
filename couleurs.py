@@ -2,6 +2,7 @@
 Les deux agissent à la sortie de la carte graphique : aucune image ajoutée, donc ni latence ni FPS en moins, même en
 plein écran. C'est aussi ce que font le panneau NVIDIA et VibranceGUI."""
 import ctypes
+import math
 import os
 from ctypes import wintypes as w
 from functools import lru_cache
@@ -47,6 +48,34 @@ def rampe(r, origine, force=1.0):
             v = o[k] + (o[k + 1] - o[k]) * (y - k)
             res.append(round(o[i] + (v - o[i]) * force))
     return res
+
+
+def _matrice(r):
+    """Saturation puis rotation de teinte, comme le pilote NVIDIA avant la rampe (matrices des filtres CSS, luminance
+    BT.709). shortcut: la vibrance NVIDIA n'est qu'approchée par une saturation (0 % = gris, 100 % = ×2)."""
+    s, a = r["saturation"] / 50, math.radians(r["rotation"])
+    lr, lg, lb = 0.2126, 0.7152, 0.0722
+    sat = [[lr + (1 - lr) * s, lg - lg * s, lb - lb * s], [lr - lr * s, lg + (1 - lg) * s, lb - lb * s],
+           [lr - lr * s, lg - lg * s, lb + (1 - lb) * s]]
+    co, si = math.cos(a), math.sin(a)
+    teinte = [[.213 + co * .787 - si * .213, .715 - co * .715 - si * .715, .072 - co * .072 + si * .928],
+              [.213 - co * .213 + si * .143, .715 + co * .285 + si * .140, .072 - co * .072 - si * .283],
+              [.213 - co * .213 - si * .787, .715 - co * .715 + si * .715, .072 + co * .928 + si * .072]]
+    return [[sum(teinte[i][k] * sat[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+
+
+def cube(r, n=33):
+    """LUT 3D au format .cube (lu par ffmpeg, OBS, les logiciels de montage) : ce que l'écran montre avec les réglages r.
+    Sert à mettre les couleurs dans les vidéos et captures, qui ne voient ni la rampe ni la vibrance."""
+    m = _matrice(r)
+    lignes = [f"LUT_3D_SIZE {n}"]
+    for b in range(n):  # le rouge varie le plus vite : ordre du format .cube
+        for g in range(n):
+            for rouge in range(n):
+                x = (rouge / (n - 1), g / (n - 1), b / (n - 1))
+                v = [min(max(sum(m[i][j] * x[j] for j in range(3)), 0.0), 1.0) for i in range(3)]
+                lignes.append(" ".join(f"{courbe(r, i, v[i]):.5f}" for i in range(3)))
+    return "\n".join(lignes) + "\n"
 
 
 def niveau(pourcent, mini, maxi, defaut):

@@ -121,6 +121,17 @@
   .corriger { padding: 6px 12px; border-radius: 6px; background: var(--accent); color: var(--on-accent); font-weight: 600;
               font-size: 13px; white-space: nowrap; }
   .corriger:disabled { opacity: .5; cursor: default; }
+  .chemin { font: 12px var(--mono); color: var(--text); padding: 4px 0; word-break: break-all; }
+  .statut { display: flex; align-items: center; gap: 12px; margin: 16px 0 8px; }
+  .statut .voyant { margin: 0; align-self: center; }
+  .statut.ok .voyant { background: var(--accent); box-shadow: none; }
+  .statut.ko .voyant { background: var(--warn); box-shadow: none; }
+  .journal { display: grid; gap: 4px; margin-bottom: 16px; }
+  .journal div { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; padding: 6px 12px;
+                 background: var(--surface); border-radius: 6px; }
+  .journal small { font-family: var(--mono); color: var(--accent); white-space: nowrap; }
+  .journal small.ko { color: var(--danger); }
+  .note { color: var(--muted); font-size: 13px; max-width: 72ch; border-left: 2px solid var(--border); padding-left: 12px; }
 
   .pied { display: flex; justify-content: flex-end; margin-top: 24px; }
   .supprimer { color: var(--muted); font-size: 13px; padding: 4px 12px; border-radius: 6px; }
@@ -149,6 +160,8 @@
     <div class="titre-section outils">Outils</div>
     <button class="profil" id="outil-latence"><span class="nom">Latence CPU</span>
       <span class="sous">Bilan et corrections pour Valorant</span></button>
+    <button class="profil" id="outil-videos"><span class="nom">Vidéos et captures</span>
+      <span class="sous">Tes couleurs dans les clips</span></button>
   </aside>
   <section id="editeur"><p class="vide">Chargement…</p></section>
 </main>
@@ -172,7 +185,7 @@ const PISTES = {
   bleu: "linear-gradient(90deg, #2d2d48, #4d8dff)",
 };
 let E = null, P = null, vu = {};
-let vue = "profil", latT = 0, latEnCours = false;  // vue : "profil" ou "latence"
+let vue = "profil", latT = 0, latEnCours = false;  // vue : "profil", "latence" ou "videos"
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const poser = (el, html) => { if (el._html !== html) { el._html = html; el.innerHTML = html; } };  // sans casser un clic en cours
@@ -234,11 +247,48 @@ async function tick() {
     </button>`).join("") || `<p class="vide">Aucun profil</p>`);
 
   $("#outil-latence").classList.toggle("choisi", vue === "latence");
+  $("#outil-videos").classList.toggle("choisi", vue === "videos");
   if (vue === "latence") { if (Date.now() - latT > 2000) latence(); }
+  else if (vue === "videos") videos();
   else if (E.choisi !== vu.id || E.version !== vu.version) {
     vu = { id: E.choisi, version: E.version };
     editeur();
   }
+}
+
+const court = d => d.split("\\").slice(-2).join("\\");
+function videos() {
+  const V = E.videos;
+  poser($("#v-form"), `
+    <h1 class="titre-outil">Vidéos et captures</h1>
+    <p class="intro">Les couleurs de Prisme sont posées à la sortie de la carte graphique : c'est pour ça qu'elles ne coûtent
+      aucune latence, mais aussi pour ça que NVIDIA, OBS, Discord et les captures d'écran ne les voient pas. Prisme recolore
+      donc tes <b>nouveaux</b> clips et captures avec le même rendu que ton écran, et range les copies à part : les
+      originaux ne sont jamais touchés.</p>
+    <div class="carte">
+      <div class="reglage"><span>Recolorer</span><div><button id="v-actif" class="interrupteur" role="switch"
+        aria-checked="${V.actif}"><span>${V.actif ? "Activé" : "Désactivé"}</span><span class="rail"></span></button></div></div>
+      <div class="reglage"><span>Avec le profil</span><div><select id="v-profil">${E.profils.map(p =>
+        `<option value="${p.id}" ${p.id === V.profil ? "selected" : ""}>${esc(p.nom)}</option>`).join("")}</select></div></div>
+      <div class="reglage"><span>Dossiers surveillés</span><div class="puces">${V.dossiers.map((d, k) => `<span class="puce">
+        <button title="${esc(d)}">${esc(court(d))}</button><button class="x" data-v-retirer="${k}"
+        aria-label="Ne plus surveiller ${esc(d)}">✕</button></span>`).join("")}
+        <button class="bouton" id="v-ajouter">+ Dossier</button></div></div>
+      <div class="reglage"><span>Copies rangées dans</span><div class="puces"><span class="chemin">${esc(V.sortie)}</span>
+        <button class="bouton" id="v-sortie">Changer</button><button class="bouton" id="v-ouvrir">Ouvrir</button></div></div>
+    </div>`);
+  const n = V.attente, s = n > 1 ? "s" : "";
+  const [classe, texte] = !V.actif ? ["", "Désactivé : rien n'est recoloré."]
+    : V.en_cours ? ["ok", `En cours : ${esc(V.en_cours)}`]
+    : V.pause ? ["ko", `${n} fichier${s} en attente : ${esc(V.pause)} est lancé. Ça reprend dès que tu le fermes, pour ne pas te coûter de latence.`]
+    : ["ok", "Prêt : chaque nouveau clip ou capture sera recoloré quelques secondes après son enregistrement."];
+  poser($("#v-etat"), `
+    <div class="statut ${classe}"><i class="voyant"></i><span>${texte}</span></div>
+    ${V.journal.length ? `<div class="journal">${V.journal.map(j => `<div><span>${esc(j.nom)}</span>
+      <small class="${j.ok ? "" : "ko"}">${j.ok ? "recoloré" : "échec"}</small></div>`).join("")}</div>` : ""}
+    <p class="note">Partage d'écran Discord en direct : impossible à recolorer sans ajouter de la latence au jeu. Si tes
+      viewers doivent voir tes couleurs en direct, utilise plutôt les filtres de jeu NVIDIA (Alt+F3), en mettant le profil
+      Prisme au neutre pour ne pas doubler l'effet.</p>`);
 }
 
 // Bilan relu toutes les 2 s tant que la page est ouverte (la charge des applis se mesure entre deux lectures).
@@ -351,7 +401,22 @@ document.addEventListener("click", e => {
     $("#editeur").innerHTML = `<p class="vide">Analyse du PC…</p>`;
     latT = 0;
     tick();
-  } else if (t.dataset.corriger) {
+  } else if (t.id === "outil-videos") {
+    vue = "videos";
+    $("#editeur")._html = null;
+    $("#editeur").innerHTML = `<div id="v-form"></div><div id="v-etat"></div>`;
+    tick();
+  } else if (t.id === "v-actif") api().modifier_videos("actif", !E.videos.actif).then(tick);
+  else if (t.id === "v-ajouter" || t.id === "v-sortie") {
+    api().choisir_dossier().then(d => {
+      if (!d) return;
+      if (t.id === "v-sortie") return api().modifier_videos("sortie", d).then(tick);
+      if (!E.videos.dossiers.includes(d)) return api().modifier_videos("dossiers", [...E.videos.dossiers, d]).then(tick);
+    });
+  } else if (t.dataset.vRetirer) {
+    api().modifier_videos("dossiers", E.videos.dossiers.filter((_, k) => k !== +t.dataset.vRetirer)).then(tick);
+  } else if (t.id === "v-ouvrir") api().ouvrir_sortie();
+  else if (t.dataset.corriger) {
     t.disabled = true;
     api().corriger(t.dataset.corriger).then(() => { latT = 0; $("#editeur")._html = null; });  // redessiner même si rien n'a changé
   }
@@ -383,6 +448,7 @@ document.addEventListener("change", e => {
   if (t.classList.contains("val")) regler(t.closest(".ligne").dataset.cle, parseFloat(t.value.replace(",", ".")));
   else if (t.id === "nom") envoyer(P.id, "nom", t.value).then(tick);
   else if (t.id === "ecran") { P.ecran = t.value; envoyer(P.id, "ecran", t.value); }
+  else if (t.id === "v-profil") api().modifier_videos("profil", +t.value).then(tick);
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") fermerMenu();

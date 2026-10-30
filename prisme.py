@@ -3,12 +3,14 @@ la fenêtre choisie est au premier plan, sur l'écran choisi. Les couleurs d'ori
 import json
 import os
 import threading
+import time
 from pathlib import Path
 
 import webview
 
 import couleurs as c
 import latence as lat
+import videos as vid
 
 ICI = Path(__file__).parent
 REGLAGES = ICI / "reglages.json"
@@ -84,6 +86,8 @@ class Api:
             self._d = json.loads(json.dumps(DEPART))  # copie profonde
         for p in self._d["profils"]:
             p["r"] = {**c.NEUTRE, **p["r"]}
+        self._d["videos"] = {**vid.reglages_par_defaut(), **self._d.get("videos", {})}
+        self._vid = {"attente": 0, "pause": "", "en_cours": "", "journal": []}  # tenu par _boucle_videos
         self._choisi = self._d["profils"][0]["id"] if self._d["profils"] else None
         self._version = 0  # change quand Python remplace des réglages : l'interface redessine ses curseurs
         self._montres, self._apercu = {}, False
@@ -92,13 +96,15 @@ class Api:
         self._stop = threading.Event()
         self._fil = threading.Thread(target=self._boucle, daemon=True)
         self._fil.start()
+        self._fil_vid = threading.Thread(target=self._boucle_videos, daemon=True)
+        self._fil_vid.start()
 
     def etat(self):
         with self._verrou:
             return {"actif": self._d["actif"], "profils": self._d["profils"], "choisi": self._choisi,
                     "version": self._version, "ecrans": self._e.liste, "nvidia": list(self._e.nv.ecrans),
                     "montres": self._montres, "apercu": self._apercu, "limite": sorted(self._e.limite),
-                    "neutre": c.NEUTRE, "prereglages": list(c.PREREGLAGES)}
+                    "neutre": c.NEUTRE, "prereglages": list(c.PREREGLAGES), "videos": {**self._d["videos"], **self._vid}}
 
     def basculer(self):
         with self._verrou:
@@ -163,6 +169,32 @@ class Api:
     def corriger(self, id):
         lat.corriger(id)
 
+    def modifier_videos(self, champ, valeur):
+        """"actif", "profil" (id), "dossiers" ([chemins]) ou "sortie" (chemin)."""
+        with self._verrou:
+            v = self._d["videos"]
+            if champ == "actif":
+                v["actif"] = bool(valeur)
+                if v["actif"]:
+                    v["depuis"] = time.time()  # seulement ce qui sera enregistré à partir de maintenant
+            elif champ == "profil" and self._profil(valeur):
+                v["profil"] = valeur
+            elif champ == "dossiers":
+                v["dossiers"] = [str(d) for d in valeur]
+            elif champ == "sortie" and str(valeur).strip():
+                v["sortie"] = str(valeur)
+            self._sauver()
+
+    def choisir_dossier(self):
+        """Fenêtre Windows de choix d'un dossier : le chemin choisi, ou None."""
+        r = webview.windows[0].create_file_dialog(webview.FileDialog.FOLDER)
+        return r[0] if r else None
+
+    def ouvrir_sortie(self):
+        d = Path(self._d["videos"]["sortie"])
+        d.mkdir(parents=True, exist_ok=True)
+        os.startfile(d)
+
     def _profil(self, id):
         return next((p for p in self._d["profils"] if p["id"] == id), None)
 
@@ -193,9 +225,35 @@ class Api:
                 self._montres = {e: p["nom"] for e, p in voulu.items() if p}
                 self._e.appliquer({e: p and p["r"] for e, p in voulu.items()}, forcer=n % 20 == 0)
 
+    def _boucle_videos(self):
+        """Toutes les 3 s : nouveaux clips et captures à recolorer, un à la fois, jamais pendant que le jeu tourne."""
+        rates = set()  # ffmpeg a échoué dessus : pas retentés avant le prochain lancement de Prisme
+        while not self._stop.wait(3):
+            with self._verrou:
+                v = dict(self._d["videos"])
+                p = self._profil(v["profil"]) or next(iter(self._d["profils"]), None)
+                r = dict(p["r"]) if p else None
+                # programme -> nom à afficher : les jeux du profil, et Valorant dans tous les cas
+                jeux = {lat.JEU.lower(): "Valorant", **{x["exe"].lower(): x["titre"] for x in p["cibles"]}} if p else {}
+            liste = [f for f in vid.nouveaux(v["dossiers"], v["depuis"], v["sortie"]) if f not in rates] \
+                if v["actif"] and r else []
+            jeu = vid.lance(jeux) if liste else ""
+            self._vid.update(attente=len(liste), pause=jeux.get(jeu.lower(), ""))
+            if not liste or jeu:
+                continue
+            f = liste[0]
+            self._vid["en_cours"] = f.name
+            ok = vid.recolorer(f, v["sortie"], r, lambda: self._stop.is_set() or bool(vid.lance(jeux)))
+            self._vid["en_cours"] = ""
+            if ok is False:
+                rates.add(f)
+            if ok is not None:
+                self._vid["journal"] = [{"nom": f.name, "ok": ok}] + self._vid["journal"][:7]
+
     def _fermer(self):
         self._stop.set()
         self._fil.join(1)
+        self._fil_vid.join(2)  # le temps d'arrêter ffmpeg s'il tourne
         self._e.restaurer()
 
 

@@ -1,8 +1,13 @@
 """Calculs purs : rien ne change à l'écran. Lancer : uv run python -m unittest"""
+import os
+import tempfile
+import time
 import unittest
+from pathlib import Path
 
 import couleurs as c
 import latence as lat
+import videos as vid
 
 IDENTITE = [i * 257 for i in range(256)] * 3
 EXTREMES = [{**c.NEUTRE, **{k: v for k in c.NEUTRE if k not in ("saturation", "rotation")}} for v in (-1.0, 1.0)]
@@ -32,6 +37,29 @@ class Rampe(unittest.TestCase):
         self.assertGreater(milieu({"exposition": 0.5}), 0.5)
         self.assertGreater(c.courbe({**c.NEUTRE, "contraste": 0.5}, 0, 0.8), 0.8)
         self.assertGreater(milieu({"temperature": 0.5}, 0), milieu({"temperature": 0.5}, 2))  # chaud : plus de rouge
+
+
+class Cube(unittest.TestCase):
+    @staticmethod
+    def points(r, n=5):
+        lignes = c.cube(r, n).splitlines()
+        assert lignes[0] == f"LUT_3D_SIZE {n}" and len(lignes) == n ** 3 + 1
+        return [tuple(map(float, l.split())) for l in lignes[1:]]
+
+    def test_neutre_ne_change_rien(self):
+        grille = [(rr / 4, g / 4, b / 4) for b in range(5) for g in range(5) for rr in range(5)]  # rouge le plus rapide
+        for p, q in zip(self.points(c.NEUTRE), grille):
+            self.assertAlmostEqual(max(abs(x - y) for x, y in zip(p, q)), 0, places=4)
+
+    def test_saturation(self):
+        rouge_terne = 2 * 25 + 1 * 5 + 3  # point (0,75 ; 0,25 ; 0,5) de la grille 5×5×5
+        ecart = lambda s: (lambda p: p[0] - p[1])(self.points({**c.NEUTRE, "saturation": s})[rouge_terne])
+        self.assertGreater(ecart(80), ecart(50))
+        self.assertAlmostEqual(ecart(0), 0, places=4)  # 0 % : gris
+
+    def test_dans_les_bornes(self):
+        for r in [{**c.NEUTRE, **p} for p in c.PREREGLAGES.values()] + EXTREMES:
+            self.assertTrue(all(0 <= x <= 1 for p in self.points(r) for x in p), r)
 
 
 class Niveau(unittest.TestCase):
@@ -107,6 +135,29 @@ class Latence(unittest.TestCase):
         self.assertEqual(v["fond"], (None, None))  # première mesure
         self.assertIn("valorant", v)
         self.assertNotIn("reflex", v)
+
+
+class Videos(unittest.TestCase):
+    def test_nouveaux(self):
+        with tempfile.TemporaryDirectory() as d:
+            d, maintenant = Path(d), time.time()
+            sortie = d / "sortie"
+            sortie.mkdir()
+
+            def fichier(nom, age):
+                (d / nom).write_bytes(b"x")
+                os.utime(d / nom, (maintenant - age, maintenant - age))
+
+            fichier("ancien.mp4", 3600)  # enregistré avant l'activation
+            fichier("clip.mp4", 60)
+            fichier("capture.png", 30)
+            fichier("en cours.mp4", 1)  # encore en train de s'écrire
+            fichier("notes.txt", 60)
+            fichier("deja.mp4", 60)
+            (sortie / f"deja{vid.SUFFIXE}.mp4").write_bytes(b"x")
+            fichier(f"copie{vid.SUFFIXE}.mp4", 60)  # une copie posée dans un dossier surveillé
+            self.assertEqual([f.name for f in vid.nouveaux([str(d)], maintenant - 600, sortie)],
+                             ["clip.mp4", "capture.png"])
 
 
 if __name__ == "__main__":

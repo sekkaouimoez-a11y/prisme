@@ -31,6 +31,17 @@ graphique, plein écran et VSync, limite de FPS, applis qui prennent du processe
 Rien n'est lu ni écrit dans la mémoire du jeu. La priorité du jeu n'est pas touchée : Valorant se met lui-même en Haute
 quand on joue.
 
+## Vidéos et captures
+Les couleurs de Prisme sont posées à la sortie de la carte graphique : les enregistrements (NVIDIA, OBS, Xbox Game Bar),
+les captures et les partages d'écran ne les voient pas. Page **Outils › Vidéos et captures** : Prisme surveille des
+dossiers (par défaut celui des clips NVIDIA de Valorant) et recolore chaque **nouveau** clip ou capture avec le rendu du
+profil choisi (une LUT 3D calculée depuis ses réglages), puis range la copie, suffixée « (Prisme) », dans `~\Prisme`.
+- Les originaux ne sont jamais modifiés.
+- Rien ne tourne pendant que le jeu est lancé (pour ne pas ajouter de latence) : les fichiers attendent sa fermeture.
+- Encodage par la puce vidéo NVIDIA (NVENC), sinon par le processeur. ffmpeg est fourni par le paquet `imageio-ffmpeg`.
+- Le partage d'écran Discord en direct ne peut pas être recoloré sans coût en latence : pour ça, les filtres de jeu NVIDIA
+  (Alt+F3) agissent dans l'image elle-même.
+
 ## Comment ça marche
 - Rampe gamma de Windows (`SetDeviceGammaRamp`), par écran : luminosité, contraste, exposition, gamma, température,
   teinte, canaux. Posée par-dessus l'étalonnage existant de l'écran.
