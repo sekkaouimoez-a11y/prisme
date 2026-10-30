@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Prisme</title>
+<style>
+  :root {
+    --bg: #12121f; --surface: #1a1a2c; --surface-2: #23233a; --border: #2d2d48;
+    --text: #ececf6; --muted: #9494b0; --accent: #9be31f; --on-accent: #0e1500;
+    --danger: #ff6b6b; --warn: #ffb547;
+    --mono: "Cascadia Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text); font: 14px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    display: grid; grid-template-rows: auto 1fr; overflow: hidden; user-select: none;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--border); }
+  .logo { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: .12em; }
+  .pastille { font: 600 11px var(--mono); letter-spacing: .08em; padding: 4px 12px; border-radius: 999px;
+              background: var(--surface-2); color: var(--muted); }
+  .pastille.on { background: var(--accent); color: var(--on-accent); }
+  #message { flex: 1; color: var(--muted); font-size: 13px; min-width: 0; }
+  #message .alerte { color: var(--warn); display: block; }
+  .interrupteur { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+  .interrupteur .rail { width: 40px; height: 22px; border-radius: 999px; background: var(--surface-2); position: relative;
+                        border: 1px solid var(--border); transition: background .15s; }
+  .interrupteur .rail::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+                               border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+  .interrupteur[aria-checked="true"] .rail { background: var(--accent); border-color: var(--accent); }
+  .interrupteur[aria-checked="true"] .rail::after { transform: translateX(18px); background: var(--on-accent); }
+
+  main { display: grid; grid-template-columns: 240px 1fr; min-height: 0; }
+  aside { background: var(--surface); border-right: 1px solid var(--border); padding: 16px 12px; overflow-y: auto; }
+  .titre-section { display: flex; justify-content: space-between; align-items: center; padding: 0 8px 8px;
+                   font: 600 11px var(--mono); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+  .plus { width: 24px; height: 24px; border-radius: 6px; font-size: 18px; line-height: 1; color: var(--muted); }
+  .plus:hover { background: var(--surface-2); color: var(--text); }
+  .profil { display: block; width: 100%; text-align: left; padding: 8px 12px; border-radius: 6px; margin-bottom: 4px; }
+  .profil:hover { background: var(--surface-2); }
+  .profil.choisi { background: var(--surface-2); box-shadow: inset 2px 0 var(--accent); }
+  .profil .nom { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .profil .nom i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .profil .sous { display: block; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  #editeur { overflow-y: auto; padding: 24px 32px 32px; }
+  .vide { color: var(--muted); padding: 48px 0; text-align: center; }
+  #nom { font-family: inherit; font-size: 22px; font-weight: 600; color: var(--text); background: none; border: 0; width: 100%;
+         border-bottom: 1px solid transparent; padding: 0 0 4px; margin-bottom: 16px; }
+  #nom:hover, #nom:focus { border-bottom-color: var(--border); outline: none; }
+  .reglage { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: start; margin-bottom: 12px; }
+  .reglage > span { color: var(--muted); font-size: 13px; padding-top: 6px; }
+  .puces { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; position: relative; }
+  .puce { display: inline-flex; align-items: center; border-radius: 6px; background: var(--surface-2);
+          border: 1px solid var(--border); font-size: 13px; }
+  .puce > button { padding: 4px 12px; }
+  .puce > button:hover { color: var(--accent); }
+  .puce .x { padding: 4px 8px; color: var(--muted); border-left: 1px solid var(--border); }
+  .puce .x:hover { color: var(--danger); }
+  .puce small { color: var(--muted); }
+  .puce.muette { padding: 4px 12px; color: var(--muted); }
+  .bouton { padding: 4px 12px; border-radius: 6px; border: 1px dashed var(--border); color: var(--muted); font-size: 13px; }
+  .bouton:hover { color: var(--text); border-color: var(--muted); }
+  .preset { padding: 4px 12px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13px; }
+  .preset:hover { border-color: var(--accent); color: var(--accent); }
+  select { font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border);
+           border-radius: 6px; padding: 4px 8px; }
+
+  #menu { position: absolute; top: 32px; left: 0; z-index: 5; width: 380px; max-height: 320px; overflow-y: auto;
+          background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 4px;
+          box-shadow: 0 12px 32px rgba(0, 0, 0, .5); }
+  #menu button { display: block; width: 100%; text-align: left; padding: 8px 12px; border-radius: 6px; }
+  #menu button:hover { background: var(--border); }
+  #menu small { display: block; color: var(--muted); font-family: var(--mono); font-size: 11px; }
+  #menu p { margin: 8px 12px; color: var(--muted); }
+
+  .cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-top: 16px; align-items: start; }
+  .carte { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px 4px; }
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; border: 2px solid var(--bg); }
+  .carte h2 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 12px;
+              font: 600 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+  .ligne { margin-bottom: 12px; }
+  .ligne.off { opacity: .4; pointer-events: none; }
+  .ligne .tete { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .ligne label { flex: 1; color: var(--text); font-size: 13px; }
+  .raz { color: var(--muted); width: 24px; height: 24px; border-radius: 6px; visibility: hidden; }
+  .raz:hover { background: var(--surface-2); color: var(--text); }
+  .modifie .raz { visibility: visible; }
+  .val { width: 64px; text-align: right; font: 12px var(--mono); color: var(--text); background: var(--surface-2);
+         border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }
+  .modifie .val { color: var(--accent); }
+
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 16px; background: none; margin: 0; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--piste); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px;
+    border-radius: 50%; background: var(--text); border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--border); }
+  input[type=range]:active::-webkit-slider-thumb { background: var(--accent); }
+
+  .pied { display: flex; justify-content: flex-end; margin-top: 24px; }
+  .supprimer { color: var(--muted); font-size: 13px; padding: 4px 12px; border-radius: 6px; }
+  .supprimer:hover, .supprimer.sur { color: var(--danger); background: var(--surface-2); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <svg width="26" height="22" viewBox="0 0 26 22" aria-hidden="true">
+      <path d="M13 2 24 20H2Z" fill="none" stroke="#ececf6" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M0 13h9" stroke="#ececf6" stroke-width="1.5"/>
+      <path d="M15 12l11-4M15 13l11 0M15 14l11 4" stroke="#9be31f" stroke-width="1.5"/>
+    </svg>
+    PRISME
+  </div>
+  <span id="pastille" class="pastille">…</span>
+  <div id="message"></div>
+  <button id="actif" class="interrupteur" role="switch" aria-checked="false"><span>Actif</span><span class="rail"></span></button>
+</header>
+<main>
+  <aside>
+    <div class="titre-section">Profils <button class="plus" id="ajouter" title="Nouveau profil" aria-label="Nouveau profil">+</button></div>
+    <div id="profils"></div>
+  </aside>
+  <section id="editeur"><p class="vide">Chargement…</p></section>
+</main>
+<script>
+const api = () => window.pywebview.api;
+const GROUPES = [
+  ["Base", [["luminosite", "Luminosité"], ["contraste", "Contraste"], ["exposition", "Exposition"], ["gamma", "Gamma"]]],
+  ["Couleur", [["saturation", "Saturation (vibrance NVIDIA)"], ["rotation", "Rotation de teinte (NVIDIA)"],
+               ["temperature", "Température"], ["teinte", "Teinte vert / magenta"]]],
+  ["Canaux", [["rouge", "Rouge"], ["vert", "Vert"], ["bleu", "Bleu"]]],
+];
+const NVIDIA = ["saturation", "rotation"];
+const BORNES = { saturation: [0, 100, 1], rotation: [0, 359, 1] };  // les autres : -1 à 1
+const PISTES = {
+  saturation: "linear-gradient(90deg, #7d7d7d, #ff3bd4)",
+  rotation: "linear-gradient(90deg, #f33, #ff3, #3f3, #3ff, #33f, #f3f, #f33)",
+  temperature: "linear-gradient(90deg, #4da3ff, #ececf6, #ffa043)",
+  teinte: "linear-gradient(90deg, #3fdc6a, #ececf6, #e04ae0)",
+  rouge: "linear-gradient(90deg, #2d2d48, #ff4d4d)",
+  vert: "linear-gradient(90deg, #2d2d48, #3fdc6a)",
+  bleu: "linear-gradient(90deg, #2d2d48, #4d8dff)",
+};
+let E = null, P = null, vu = {};
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const poser = (el, html) => { if (el._html !== html) { el._html = html; el.innerHTML = html; } };  // sans casser un clic en cours
+const nomEcran = id => E.ecrans.find(e => e.id === id)?.nom ?? id;
+const nomAppli = c => c.titre + (c.seule ? " · cette fenêtre" : "");
+
+// Envois au fil de l'eau : une valeur à la fois par réglage, la plus récente (pywebview répond dans le désordre sinon).
+const attente = new Map();
+let pompe = false;
+async function envoyer(id, champ, valeur) {
+  attente.set(id + "|" + champ, [id, champ, valeur]);
+  if (pompe) return;
+  pompe = true;
+  while (attente.size) {
+    const [k, a] = attente.entries().next().value;
+    attente.delete(k);
+    await api().modifier(...a);
+  }
+  pompe = false;
+}
+
+function format(cle, v) {
+  if (cle === "saturation") return Math.round(v) + " %";
+  if (cle === "rotation") return Math.round(v) + "°";
+  return (v > 0 ? "+" : "") + v.toFixed(2);
+}
+
+function piste(cle, v) {
+  if (PISTES[cle]) return PISTES[cle];
+  const p = (v + 1) * 50, a = Math.min(p, 50), b = Math.max(p, 50);  // rempli depuis le milieu
+  return `linear-gradient(90deg, var(--border) ${a}%, var(--accent) ${a}% ${b}%, var(--border) ${b}%)`;
+}
+
+async function tick() {
+  E = await api().etat();
+  $("#actif").setAttribute("aria-checked", E.actif);
+  const montres = Object.entries(E.montres);
+  const pastille = !E.actif ? "PAUSE" : E.apercu ? "APERÇU" : montres.length ? "ACTIF" : "EN ATTENTE";
+  $("#pastille").textContent = pastille;
+  $("#pastille").classList.toggle("on", E.actif && pastille !== "EN ATTENTE");
+  const choisi = E.profils.find(p => p.id === E.choisi);
+  let msg;
+  if (!E.actif) msg = "En pause : couleurs d'origine sur tous les écrans.";
+  else if (E.apercu) msg = `Aperçu de « ${esc(choisi.nom)} » pendant que tu le règles. ` + (choisi.cibles.length
+    ? `Ensuite, il s'applique quand ${esc(choisi.cibles.map(c => c.titre).join(" ou "))} est au premier plan.`
+    : "Il s'applique tout le temps.");
+  else if (montres.length) msg = montres.map(([e, n]) => `« ${esc(n)} » sur ${esc(nomEcran(e))}`).join(", ") + ".";
+  else msg = "Couleurs d'origine : aucun profil ne concerne la fenêtre au premier plan.";
+  for (const e of E.limite) msg += `<span class="alerte">Windows a limité l'effet sur ${esc(nomEcran(e))} (réglage trop fort).</span>`;
+  if (!E.nvidia.length) msg += `<span class="alerte">Pas de carte NVIDIA : saturation et rotation de teinte indisponibles.</span>`;
+  poser($("#message"), msg);
+
+  const actifs = new Set(Object.values(E.montres));
+  poser($("#profils"), E.profils.map(p => `
+    <button class="profil ${p.id === E.choisi ? "choisi" : ""}" data-id="${p.id}">
+      <span class="nom">${esc(p.nom)}${actifs.has(p.nom) ? "<i title=\"Appliqué en ce moment\"></i>" : ""}</span>
+      <span class="sous">${p.cibles.length ? esc(p.cibles.map(nomAppli).join(", ")) : "Toujours"} ·
+        ${p.ecran ? esc(nomEcran(p.ecran)) : p.cibles.length ? "écran de la fenêtre" : "tous les écrans"}</span>
+    </button>`).join("") || `<p class="vide">Aucun profil</p>`);
+
+  if (E.choisi !== vu.id || E.version !== vu.version) {
+    vu = { id: E.choisi, version: E.version };
+    editeur();
+  }
+}
+
+function editeur() {
+  P = structuredClone(E.profils.find(p => p.id === E.choisi) ?? null);
+  if (!P) { $("#editeur").innerHTML = `<p class="vide">Crée un profil avec le + à gauche.</p>`; return; }
+  const sansNv = !E.nvidia.length;
+  $("#editeur").innerHTML = `
+    <input id="nom" value="${esc(P.nom)}" maxlength="40" aria-label="Nom du profil">
+    <div class="reglage"><span>S'applique</span><div class="puces" id="cibles"></div></div>
+    <div class="reglage"><span>Écran</span><div><select id="ecran"></select></div></div>
+    <div class="reglage"><span>Préréglages</span><div class="puces">
+      ${E.prereglages.map(n => `<button class="preset" data-preset="${esc(n)}">${esc(n)}</button>`).join("")}</div></div>
+    <div class="cartes">${GROUPES.map(([g, cles]) => `
+      <div class="carte"><h2>${g}
+        <button class="raz" style="visibility:visible" data-raz-groupe="${g}" title="Tout remettre à zéro">↺</button></h2>
+        ${cles.map(([cle, label]) => {
+          const [min, max, pas] = BORNES[cle] ?? [-1, 1, 0.01];
+          return `<div class="ligne ${NVIDIA.includes(cle) && sansNv ? "off" : ""}" data-cle="${cle}">
+            <div class="tete"><label for="r-${cle}">${label}</label>
+              <button class="raz" title="Remettre à zéro" aria-label="Remettre ${label} à zéro">↺</button>
+              <input class="val" aria-label="${label}"></div>
+            <input type="range" id="r-${cle}" min="${min}" max="${max}" step="${pas}">
+          </div>`;
+        }).join("")}
+      </div>`).join("")}</div>
+    <div class="pied"><button class="supprimer" id="supprimer">Supprimer ce profil</button></div>`;
+  for (const l of document.querySelectorAll(".ligne")) montrer(l.dataset.cle);
+  cibles();
+}
+
+function montrer(cle) {
+  const l = document.querySelector(`.ligne[data-cle="${cle}"]`), v = P.r[cle];
+  l.querySelector("input[type=range]").value = v;
+  l.querySelector("input[type=range]").style.setProperty("--piste", piste(cle, v));
+  l.querySelector(".val").value = format(cle, v);
+  l.classList.toggle("modifie", v !== E.neutre[cle]);
+}
+
+function regler(cle, v) {
+  const [min, max] = BORNES[cle] ?? [-1, 1];
+  if (!Number.isFinite(v)) v = P.r[cle];
+  P.r[cle] = Math.min(Math.max(v, min), max);
+  montrer(cle);
+  envoyer(P.id, cle, P.r[cle]);
+}
+
+function cibles() {
+  poser($("#cibles"), (P.cibles.length
+    ? P.cibles.map((c, k) => `<span class="puce">
+        <button data-mode="${k}" title="${esc(c.exe)} — cliquer pour basculer entre toute l'appli et cette fenêtre seulement">
+          ${esc(c.titre)} <small>· ${c.seule ? "cette fenêtre" : "toute l'appli"}</small></button>
+        <button class="x" data-retirer="${k}" aria-label="Retirer ${esc(c.titre)}">✕</button></span>`).join("")
+    : `<span class="puce muette">Toujours, quelle que soit la fenêtre</span>`)
+    + `<button class="bouton" id="ouvrir-menu">+ Appli ou fenêtre</button>`);
+  poser($("#ecran"), [["", P.cibles.length ? "L'écran où est la fenêtre" : "Tous les écrans"],
+    ...E.ecrans.map(e => [e.id, `${e.nom} · ${e.taille}${e.principal ? " · principal" : ""}`])]
+    .map(([v, t]) => `<option value="${esc(v)}" ${v === P.ecran ? "selected" : ""}>${esc(t)}</option>`).join(""));
+}
+
+function changerCibles() {
+  envoyer(P.id, "cibles", P.cibles);
+  cibles();
+}
+
+async function ouvrirMenu() {
+  fermerMenu();
+  const m = document.createElement("div");
+  m.id = "menu";
+  m.innerHTML = "<p>Recherche des fenêtres…</p>";
+  $("#cibles").appendChild(m);
+  const liste = await api().fenetres_ouvertes();
+  m.innerHTML = liste.length ? "<p>Fenêtres ouvertes (lance ton jeu d'abord) :</p>" + liste.map((f, k) =>
+    `<button data-ajouter="${k}">${esc(f.titre)}<small>${esc(f.exe)}</small></button>`).join("")
+    : "<p>Aucune fenêtre trouvée. Lance ton jeu, puis réessaie.</p>";
+  m._liste = liste;
+}
+const fermerMenu = () => $("#menu")?.remove();
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("button");
+  if (!$("#menu")?.contains(t) && t?.id !== "ouvrir-menu") fermerMenu();
+  if (!t) return;
+  if (t.id === "actif") api().basculer().then(tick);
+  else if (t.id === "ajouter") api().ajouter().then(tick);
+  else if (t.dataset.id) api().choisir(+t.dataset.id).then(tick);
+  else if (t.dataset.preset) api().prereglage(P.id, t.dataset.preset).then(tick);
+  else if (t.id === "ouvrir-menu") ouvrirMenu();
+  else if (t.dataset.ajouter) {
+    const f = $("#menu")._liste[+t.dataset.ajouter];
+    if (!P.cibles.some(c => c.exe === f.exe && c.titre === f.titre)) P.cibles.push({ ...f, seule: false });
+    fermerMenu();
+    changerCibles();
+  } else if (t.dataset.mode) { const c = P.cibles[+t.dataset.mode]; c.seule = !c.seule; changerCibles(); }
+  else if (t.dataset.retirer) { P.cibles.splice(+t.dataset.retirer, 1); changerCibles(); }
+  else if (t.dataset.razGroupe) {
+    for (const [cle] of GROUPES.find(g => g[0] === t.dataset.razGroupe)[1]) regler(cle, E.neutre[cle]);
+  } else if (t.classList.contains("raz")) { const cle = t.closest(".ligne").dataset.cle; regler(cle, E.neutre[cle]); }
+  else if (t.id === "supprimer") {
+    if (!t.classList.contains("sur")) {
+      t.classList.add("sur");
+      t.textContent = "Cliquer encore pour supprimer";
+      setTimeout(() => { t.classList.remove("sur"); t.textContent = "Supprimer ce profil"; }, 3000);
+    } else api().supprimer(P.id).then(tick);
+  }
+});
+document.addEventListener("input", e => {
+  if (e.target.type === "range") regler(e.target.closest(".ligne").dataset.cle, +e.target.value);
+});
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.classList.contains("val")) regler(t.closest(".ligne").dataset.cle, parseFloat(t.value.replace(",", ".")));
+  else if (t.id === "nom") envoyer(P.id, "nom", t.value).then(tick);
+  else if (t.id === "ecran") { P.ecran = t.value; envoyer(P.id, "ecran", t.value); }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") fermerMenu();
+  if (e.key === "Enter" && e.target.matches("#nom, .val")) e.target.blur();
+});
+window.addEventListener("pywebviewready", () => { tick(); setInterval(tick, 250); });
+</script>
+</body>
+</html>
